@@ -396,6 +396,7 @@ git push
 - [OpenAI — Deprecations](https://developers.openai.com/api/docs/deprecations): `gpt-4o`, `gpt-4o-mini`, `gpt-4.1-mini` bị gỡ khỏi API ngày 14/01/2027; lab dùng `gpt-6-luna` / `gpt-6.1-terra`.
 - [OpenAI — Pricing](https://developers.openai.com/api/docs/pricing) (giá trong notebook lấy 11/2026; kiểm tra lại trước buổi lab).
 - [Google AI Studio — Deprecations](https://aistudio.google.com/docs/deprecations): `gemini-2.5-pro` / `-flash` tắt ngày 01/12/2026.
+- [Google AI Studio — Pricing](https://aistudio.google.com/docs/pricing): `gemini-3.8-flash` $0.75 / $3.75 mỗi 1M token (tăng lên $1.50 / $7.50 từ 01/01/2027), `gemini-3.5-flash-lite` $0.30 / $2.50.
 - [Groq — Reasoning](https://console.groq.com/docs/reasoning): `reasoning_effort` của gpt-oss chỉ nhận `low` / `medium` / `high`.
 - [OpenRouter — Reasoning tokens](https://openrouter.ai/docs/use-cases/reasoning-tokens): tham số `reasoning.effort`.
 
