@@ -1,0 +1,9 @@
+# Colab / local runtime artifacts
+lab1_report.json
+*.zip
+__pycache__/
+.pytest_cache/
+.ipynb_checkpoints/
+.venv/
+.env
+Pham-Manh-Day-1-AI-Foundation.pdf
