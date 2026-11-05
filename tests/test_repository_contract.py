@@ -27,7 +27,7 @@ STUDENT_TODOS = [
 
 PREDICTION_KEYS = [
     "ml_f1", "ml_lr", "dl_curve", "dl_relu",
-    "emb_search", "emb_tricky", "llm_models", "llm_fewshot",
+    "emb_search", "emb_tricky", "llm_models", "llm_fewshot", "tradeoff", "hard_eval",
 ]
 
 
@@ -85,6 +85,22 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("archive.ics.uci.edu", self.code_source)
         self.assertIn("lab1_report.json", self.all_source)
         self.assertNotIn('"student_id"', self.code_source)
+
+    def test_hard_eval_dataset_is_complete_and_embedded(self):
+        import csv
+        from collections import Counter
+        with open(ROOT / "data" / "hard_eval_50.csv", encoding="utf-8") as f:
+            rows = list(csv.DictReader(f))
+        self.assertEqual(len(rows), 50)
+        self.assertEqual([int(r["id"]) for r in rows], list(range(1, 51)))
+        self.assertTrue(all(r["label"] in {"spam", "ham"} and r["text"].strip() and r["why_tricky"].strip() for r in rows))
+        self.assertEqual(Counter(r["category"] for r in rows), Counter({
+            "ham_looks_spam": 10, "natural_spam": 10, "manipulation": 8, "obfuscation": 6,
+            "prompt_injection": 6, "transactional_ham": 6, "talks_about_spam": 4}))
+        self.assertEqual(len({r["text"] for r in rows}), 50)
+        self.assertIn("HARD_EVAL = pd.DataFrame", self.code_source)
+        for r in rows[:3] + rows[-3:]:
+            self.assertIn(json.dumps(r["text"], ensure_ascii=False)[1:-1], self.code_source)
 
 
 if __name__ == "__main__":

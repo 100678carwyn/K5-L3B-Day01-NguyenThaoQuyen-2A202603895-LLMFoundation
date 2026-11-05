@@ -25,7 +25,7 @@ máy học trọng số     đặc trưng          pre-train + gắn "đầu"  c
 | 3 | 1:05 – 1:30 | **Embedding** | Cosine, tìm kiếm theo nghĩa, kNN trên vector của encoder `all-MiniLM-L6-v2` |
 | — | 1:30 – 1:35 | Nghỉ | |
 | 4 | 1:35 – 2:05 | **LLM** | `call_openai` (đúng chữ ký template LLM API), prompt zero/few-shot, đo chi phí |
-| 5 | 2:05 – 2:30 | Tổng hợp | Bảng so sánh, thử thách cá nhân, phản ánh, nộp bài |
+| 5 | 2:05 – 2:30 | Tổng hợp | Bảng so sánh, **biểu đồ đánh đổi lỗi ↔ độ trễ**, **stress test 50 case khó**, thử thách cá nhân, nộp bài |
 
 ## Mục tiêu học tập
 
@@ -36,7 +36,8 @@ Sau bài thực hành, bạn có thể:
 3. Giải thích vì sao deep learning không phải lúc nào cũng thắng, và đọc được dấu hiệu overfitting.
 4. Giải thích embedding là gì, vì sao nó tổng quát hoá tốt hơn bag-of-words với câu "ngụy trang".
 5. Dùng LLM cho một downstream task: thiết kế prompt, đọc output không chắc chắn, ước tính chi phí theo token.
-6. Chọn phương án cho sản phẩm thật dựa trên số đo (F1, ms/tin, USD/1k tin), không dựa trên cảm giác.
+6. Chọn phương án cho sản phẩm thật dựa trên số đo (F1, thời gian train, throughput, latency p50/p95, USD/1k tin) và đường Pareto lỗi ↔ độ trễ, không dựa trên cảm giác.
+7. Kiểm tra độ bền của model trên các case đánh lừa (spam giọng tự nhiên, thao túng, né từ khoá, prompt injection) và đề xuất cách phòng thủ.
 
 ## Bản chất: từ văn bản đến nhãn, mỗi cách làm gì?
 
@@ -227,6 +228,22 @@ Lưu ý khi so sánh:
 5.572 tin nhắn tiếng Anh (747 spam). Notebook tự tải qua `kagglehub` (không cần tài khoản Kaggle); nếu lỗi sẽ tự
 chuyển sang bản gốc trên UCI. Sau khi bỏ 403 tin trùng lặp còn 5.169 tin.
 
+### Bộ test khó: `data/hard_eval_50.csv`
+
+50 tin nhắn viết tay để đánh lừa model, có cột `why_tricky` giải thích bẫy của từng case:
+
+| Nhóm (`category`) | Số case | Nhãn |
+| --- | ---: | --- |
+| `ham_looks_spam`: tưởng spam nhưng không phải | 10 | ham |
+| `natural_spam`: spam giọng tự nhiên, không từ khoá | 10 | spam |
+| `manipulation`: thao túng / lừa đảo, mạo danh | 8 | spam |
+| `obfuscation`: né từ khoá (`C0ngr4tulat10ns`, `F R E E`) | 6 | spam |
+| `prompt_injection`: câu ra lệnh cho LLM đổi nhãn | 6 | 5 spam · 1 ham |
+| `transactional_ham`: OTP, lịch hẹn, đơn hàng | 6 | ham |
+| `talks_about_spam`: kể lại / cảnh báo tin lừa đảo | 4 | ham |
+
+Trên lời giải tham khảo, F1 của các model tụt từ khoảng 0,9 (test thường) xuống 0,4–0,7 trên bộ này. Học viên còn có thể thêm case của riêng mình (`MY_CASES`) để thử.
+
 ## Luật chơi: học để hiểu, không vibe code
 
 | Cơ chế | Cách hoạt động |
@@ -321,6 +338,7 @@ git push
 | Tệp | Dùng để làm gì |
 | --- | --- |
 | `notebooks/day01_spam_ml_dl_embedding_llm.ipynb` | notebook bài lab (làm trên Colab) |
+| `data/hard_eval_50.csv` | 50 case khó để stress test (đã nhúng sẵn trong notebook) |
 | `RUBRIC.md` | tiêu chí chấm điểm |
 | `report/` | thư mục học viên upload bài làm |
 | `requirements.txt` | thư viện nếu muốn chạy trên máy cá nhân |
