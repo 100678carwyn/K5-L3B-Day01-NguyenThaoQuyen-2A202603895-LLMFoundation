@@ -102,6 +102,20 @@ class RepositoryContractTest(unittest.TestCase):
         for r in rows[:3] + rows[-3:]:
             self.assertIn(json.dumps(r["text"], ensure_ascii=False)[1:-1], self.code_source)
 
+    def test_llm_providers_and_claude_path(self):
+        for provider in ["openai", "anthropic", "gemini", "groq", "openrouter", "ollama"]:
+            with self.subTest(provider=provider):
+                self.assertIn(f'"{provider}":', self.code_source)
+        self.assertIn('LLM_PROVIDER = "openai"', self.code_source)
+        self.assertIn("def call_claude(", self.code_source)
+        self.assertIn("def call_llm(", self.code_source)
+        self.assertIn("def build_defended_prompt(", self.code_source)
+        claude_src = self.code_source.split("def call_claude(")[1].split("def call_llm(")[0]
+        self.assertIn("import anthropic", claude_src)
+        self.assertNotIn("temperature=", claude_src)
+        self.assertIn('fallbacks="default"', claude_src)
+        self.assertIn("anthropic", self.code_source.splitlines()[0] + (ROOT / "src" / "requirements.txt").read_text())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -251,6 +251,34 @@ chuyển sang bản gốc trên UCI. Sau khi bỏ 403 tin trùng lặp còn 5.16
 
 Trên lời giải tham khảo, F1 của các model tụt từ khoảng 0,9 (test thường) xuống 0,4–0,7 trên bộ này. Học viên còn có thể thêm case của riêng mình (`MY_CASES`) để thử.
 
+## Chọn nhà cung cấp LLM API
+
+Phần 4 không bắt buộc dùng OpenAI. Thêm key vào Colab → 🔑 **Secrets** (bật *Notebook access*), rồi sửa một dòng
+`LLM_PROVIDER = "..."` trong notebook:
+
+| `LLM_PROVIDER` | Colab Secret | Model lớn / nhỏ mặc định | Cách gọi |
+| --- | --- | --- | --- |
+| `openai` (mặc định) | `OPENAI_API_KEY` | `gpt-6.1-terra` / `gpt-6-luna` | `call_openai` (OpenAI SDK) |
+| `anthropic` | `ANTHROPIC_API_KEY` | `claude-opus-5-5` / `claude-haiku-5-5` | `call_claude` (SDK chính thức `anthropic`) |
+| `gemini` | `GEMINI_API_KEY` | `gemini-3.8-flash` / `gemini-3.5-flash-lite` | `call_openai` + `base_url` Gemini (có gói miễn phí) |
+| `groq` | `GROQ_API_KEY` | `openai/gpt-oss-120b` / `openai/gpt-oss-20b` | `call_openai` + `base_url` Groq (có gói miễn phí) |
+| `openrouter` | `OPENROUTER_API_KEY` | `openai/gpt-6.1-terra` / `openai/gpt-6-luna` | `call_openai` + `base_url` OpenRouter |
+| `ollama` | — | `llama3.2:3b` / `qwen2.5:0.5b` | `call_openai` + `base_url` local (chạy trên máy cá nhân) |
+
+- Đúng như slide 21, phần lớn engine nói chuẩn **OpenAI-compatible API**, nên chỉ cần đổi `base_url`; hàm `call_openai` của
+  học viên (giữ chữ ký template) không đổi. Claude được gọi bằng SDK `anthropic` qua hàm có sẵn `call_claude`. Hàm `call_llm`
+  tự chọn đúng đường theo `LLM_PROVIDER`.
+- Tên model thay đổi nhanh. Nếu gặp lỗi *model not found*, chạy ô `list_models()` rồi sửa `PROVIDERS[...]`.
+- Model suy luận (Gemini 3, gpt-oss) và Claude cần `max_tokens` lớn hơn (512–1024) để còn chỗ cho phần "suy nghĩ"; bảng
+  `PROVIDERS` đã đặt sẵn.
+- Mỗi provider tắt/giảm phần "suy nghĩ" bằng tham số khác nhau (OpenAI `reasoning_effort="none"` + `max_completion_tokens`,
+  Groq `reasoning_effort="low"`, OpenRouter `reasoning.effort`). Cột `token_param` / `params` trong `PROVIDERS` ghi sẵn; hàm
+  `provider_kwargs(max_tokens)` trả về đúng bộ tham số, `call_openai` chỉ cần thêm `**provider_kwargs(max_tokens)`.
+- `gemini-2.5-pro` / `-flash` bị Google tắt ngày 01/12/2026, nên bảng dùng dòng Gemini 3.
+- Giá trong `PRICE_PER_1M` là giá tham khảo; model chưa có giá được tính 0 USD. Tự điền giá hiện hành nếu cần so chi phí.
+- Stress test có thêm phương án **4d. LLM + prompt phòng thủ** (`build_defended_prompt`): tin nhắn được đặt trong thẻ `<sms>` và
+  được coi là dữ liệu, không phải chỉ dẫn, để so với prompt thường trên nhóm *prompt injection*.
+
 ## Luật chơi: học để hiểu, không vibe code
 
 | Cơ chế | Cách hoạt động |
@@ -268,8 +296,8 @@ Trên lời giải tham khảo, F1 của các model tụt từ khoảng 0,9 (tes
 
 - [ ] Đăng nhập được tài khoản GitHub và tài khoản Google dùng cho Colab.
 - [ ] Dùng Chrome hoặc Edge phiên bản mới, Internet ổn định.
-- [ ] Có **OpenAI API key** cho Phần 4 (Colab → 🔑 *Secrets* → thêm `OPENAI_API_KEY`). Không có key vẫn làm được Phần 0–3.
-- [ ] Biết họ tên không dấu và MSSV để đặt tên repository.
+- [ ] Có **một** API key LLM cho Phần 4 (OpenAI, Claude, Gemini, Groq hoặc OpenRouter, xem [Chọn nhà cung cấp LLM API](#chọn-nhà-cung-cấp-llm-api)). Không có key vẫn làm được Phần 0–3.
+- [ ] Biết mã khóa (`KHOA`, ví dụ `K5`), họ tên không dấu và MSSV để đặt tên repository.
 - [ ] Giấy và bút cho phần tính tay.
 
 ## Hướng dẫn từng bước
@@ -367,6 +395,9 @@ git push
 - [OpenAI Chat Completions API](https://developers.openai.com/api/docs/api-reference/chat)
 - [OpenAI — Deprecations](https://developers.openai.com/api/docs/deprecations): `gpt-4o`, `gpt-4o-mini`, `gpt-4.1-mini` bị gỡ khỏi API ngày 14/01/2027; lab dùng `gpt-6-luna` / `gpt-6.1-terra`.
 - [OpenAI — Pricing](https://developers.openai.com/api/docs/pricing) (giá trong notebook lấy 11/2026; kiểm tra lại trước buổi lab).
+- [Google AI Studio — Deprecations](https://aistudio.google.com/docs/deprecations): `gemini-2.5-pro` / `-flash` tắt ngày 01/12/2026.
+- [Groq — Reasoning](https://console.groq.com/docs/reasoning): `reasoning_effort` của gpt-oss chỉ nhận `low` / `medium` / `high`.
+- [OpenRouter — Reasoning tokens](https://openrouter.ai/docs/use-cases/reasoning-tokens): tham số `reasoning.effort`.
 
 ## Bài phụ (tuỳ chọn, bonus): LLM API — `src/optional_llm_api/`
 
