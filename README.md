@@ -11,9 +11,10 @@ Bạn giải **cùng một bài toán** là phân loại SMS thành `spam` hay `
 lịch sử AI trong slide Ngày 1. Cuối bài, bạn so sánh 4 cách trên cùng một tập test về chất lượng, tốc độ và chi phí.
 
 ```text
-Machine Learning  →  Deep Learning  →  Embedding  →  LLM
-người chọn feature   mạng tự học        mượn "bản đồ    không train,
-máy học trọng số     đặc trưng          nghĩa" pre-train  chỉ cần prompt
+Machine Learning  →  Deep Learning  →  Embedding           →  LLM
+người chọn feature   mạng tự học        mượn encoder           không train,
+máy học trọng số     đặc trưng          pre-train + gắn "đầu"  chỉ cần prompt
+                                        phân loại lên trên
 ```
 
 | Phần | Thời gian | Cách tiếp cận | Bạn tự làm gì |
@@ -21,7 +22,7 @@ máy học trọng số     đặc trưng          nghĩa" pre-train  chỉ cầ
 | 0 | 0:00 – 0:10 | Cài đặt, khám phá dữ liệu | Tìm tin trùng lặp, hiểu vì sao accuracy dễ đánh lừa |
 | 1 | 0:10 – 0:40 | **Machine Learning** | Bag-of-words + logistic regression **từ đầu bằng numpy** + precision/recall/F1 |
 | 2 | 0:40 – 1:05 | **Deep Learning** | Mạng MLP + vòng lặp huấn luyện PyTorch, nhận diện overfitting |
-| 3 | 1:05 – 1:30 | **Embedding** | Cosine, tìm kiếm theo nghĩa, kNN trên `all-MiniLM-L6-v2` |
+| 3 | 1:05 – 1:30 | **Embedding** | Cosine, tìm kiếm theo nghĩa, kNN trên vector của encoder `all-MiniLM-L6-v2` |
 | — | 1:30 – 1:35 | Nghỉ | |
 | 4 | 1:35 – 2:05 | **LLM** | `call_openai` (đúng chữ ký template LLM API), prompt zero/few-shot, đo chi phí |
 | 5 | 2:05 – 2:30 | Tổng hợp | Bảng so sánh, thử thách cá nhân, phản ánh, nộp bài |
@@ -36,6 +37,189 @@ Sau bài thực hành, bạn có thể:
 4. Giải thích embedding là gì, vì sao nó tổng quát hoá tốt hơn bag-of-words với câu "ngụy trang".
 5. Dùng LLM cho một downstream task: thiết kế prompt, đọc output không chắc chắn, ước tính chi phí theo token.
 6. Chọn phương án cho sản phẩm thật dựa trên số đo (F1, ms/tin, USD/1k tin), không dựa trên cảm giác.
+
+## Bản chất: từ văn bản đến nhãn, mỗi cách làm gì?
+
+Máy tính không đọc được chữ, nó chỉ tính được với **số**. Vì vậy mọi cách lọc spam trong bài đều đi qua cùng
+một khung. Bốn thế hệ AI chỉ khác nhau ở chỗ **ai làm bước nào** và **bước nào được học từ dữ liệu**.
+
+```mermaid
+flowchart LR
+    A["📩 Văn bản<br/>'WIN a FREE prize!'"] --> B["① Tách<br/>token"]
+    B --> C["② Biểu diễn<br/>chữ → vector số"]
+    C --> D["③ Bộ phân loại<br/>vector → điểm số z"]
+    D --> E["④ Xác suất<br/>p = σ(z)"]
+    E --> F{"⑤ p ≥ 0.5 ?"}
+    F -- có --> G["🚫 spam (1)"]
+    F -- không --> H["✅ ham (0)"]
+```
+
+| Bước | Machine Learning (Phần 1) | Deep Learning (Phần 2) | Encoder (Phần 3) | LLM (Phần 4) |
+| --- | --- | --- | --- | --- |
+| ① Tách token | tách theo từ | tách theo từ | tách thành sub-word (WordPiece) | tách thành token của GPT |
+| ② Biểu diễn | **người** chọn: từ điển 2.000 từ, có/không (0/1) | như ML | **mượn** encoder pre-train → vector 384 chiều theo *nghĩa* | LLM tự đọc cả prompt |
+| ③ Bộ phân loại | `z = w·x + b` (1 lớp) | mạng có hidden layer, **tự học** đặc trưng | kNN / LogReg / MLP gắn lên trên | LLM **sinh ra chữ** `spam` / `ham` |
+| ④–⑤ Ra nhãn | σ rồi so ngưỡng 0.5 | σ rồi so ngưỡng 0.5 | bỏ phiếu, hoặc σ rồi so ngưỡng | đọc chữ trả về (`parse_label`) |
+| **Học từ dữ liệu có nhãn** | trọng số `w`, `b` | toàn bộ mạng | chỉ phần bộ phân loại (encoder giữ nguyên) | không học gì, chỉ viết prompt |
+
+### Theo chân một tin nhắn qua từng cách
+
+Cùng một tin `"WIN a FREE prize! Call now"`. Các con số dưới đây chỉ là **minh hoạ**, không phải kết quả thật của bạn.
+
+#### 1️⃣ Machine Learning: người chọn feature, máy học trọng số
+
+```mermaid
+flowchart LR
+    T["'WIN a FREE prize!<br/>Call now'"] -->|"tokenize"| K["win · a · free<br/>prize · call · now"]
+    K -->|"vectorize<br/>(từ điển 2.000 từ)"| X["x = [0,1,0,…,1,…,1]<br/>1 = có từ đó"]
+    X -->|"z = w·x + b"| Z["z = 3.4"]
+    Z -->|"σ(z)"| P["p = 0.97"]
+    P -->|"≥ 0.5"| L["spam"]
+```
+
+- **Bản chất:** mỗi từ có một **trọng số** học được. Ví dụ `free` = +1.5 và `call` = +1.4 kéo về spam, còn
+  `lunch` = −1.2 kéo về ham. Điểm `z` là tổng trọng số của các từ có trong tin, cộng thêm `b`.
+- **Học thế nào:** đoán `p`, đo sai bằng loss, tính gradient, rồi chỉnh `w` ngược chiều gradient. Lặp lại 300 lần
+  (gradient descent).
+- **Điểm yếu:** chỉ thấy **từ có trong từ điển**. "complimentary holiday" không có trong từ điển nên mô hình không
+  "thấy" gì, dù nghĩa giống "free prize".
+- **Trong notebook:** `tokenize` → `build_vocab` → `vectorize` → `train_logreg` → `predict_proba`.
+
+#### 2️⃣ Deep Learning: mạng tự học đặc trưng
+
+```mermaid
+flowchart LR
+    X["x (BoW 2.000 chiều)<br/>giống Phần 1"] -->|"Linear 2.000→64"| H1["64 số"]
+    H1 -->|"ReLU<br/>giữ số dương, số âm → 0"| H["h = 64 đặc trưng<br/>mạng TỰ học"]
+    H -->|"Linear 64→1"| Z["z (logit)"]
+    Z -->|"σ, ≥ 0.5"| L["spam / ham"]
+```
+
+- **Bản chất:** thêm một **hidden layer** đứng giữa. Mỗi nơ-ron ẩn tự học một **tổ hợp từ**. Ví dụ một nơ-ron
+  chỉ "sáng" khi `free` + `call` + số điện thoại cùng xuất hiện. Đây là điều LogReg không làm được, vì LogReg chỉ cộng
+  từng từ riêng lẻ.
+- **ReLU là gì:** hàm phi tuyến (giữ số dương, đổi số âm thành 0). Nếu bỏ ReLU thì 2 lớp Linear liên tiếp gộp lại
+  chỉ còn 1 lớp Linear, tức là lại thành logistic regression.
+- **Vẫn cần:** dữ liệu có nhãn, và **vẫn dùng BoW** làm đầu vào. Mạng học được tổ hợp từ, nhưng vẫn không hiểu
+  từ đồng nghĩa.
+- **Trong notebook:** `vectorize` → `build_mlp` → `train_mlp` (forward → loss → backward → `opt.step()`) →
+  `predict_mlp`.
+
+#### 3️⃣ Encoder: mượn "bản đồ nghĩa" đã được pre-train
+
+```mermaid
+flowchart LR
+    T["văn bản"] -->|"tokenizer<br/>sub-word"| K["token"]
+    K --> ENC["🧊 Encoder MiniLM<br/>6 lớp transformer<br/>pre-train trên hàng tỷ câu<br/>ĐÓNG BĂNG"]
+    ENC -->|"gộp các token<br/>thành 1 vector"| E["e = 384 số<br/>'toạ độ nghĩa'"]
+    E --> H{"Bộ phân loại<br/>(head)"}
+    H -->|"3a: kNN — 5 tin train<br/>gần nhất bỏ phiếu"| L["spam / ham"]
+    H -->|"3b: LogReg"| L
+    H -->|"3c: MLP head"| L
+```
+
+- **Bản chất:** encoder **không** phân loại spam. Nó chỉ làm **bước ② (biểu diễn)**: đặt mỗi câu thành một điểm
+  trên "bản đồ nghĩa". Câu nghĩa gần nhau thì vector gần nhau, đo bằng cosine. Ví dụ "free prize" và
+  "complimentary holiday" nằm gần nhau, còn "free for lunch?" nằm xa.
+- **Vì sao gọi là "mượn":** encoder đã học ngôn ngữ từ hàng tỷ câu trước đó. Bài lab **không train lại encoder**,
+  chỉ train một bộ phân loại nhỏ (head) đặt lên trên. Nhờ vậy cần ít dữ liệu có nhãn hơn.
+- **Cái giá:** mỗi tin phải chạy qua 6 lớp transformer, nên chậm hơn BoW nhiều lần.
+- **Trong notebook:** `emb_model.encode` → `cosine_similarity` / `top_k_similar` → `knn_predict` (3a),
+  `train_logreg` (3b), `train_mlp` (3c).
+
+#### 4️⃣ LLM: không train, chỉ cần prompt
+
+```mermaid
+flowchart LR
+    T["văn bản"] -->|"build_classification_prompt"| PR["Prompt:<br/>'Classify the SMS as spam or ham.<br/>Answer ONE word.<br/>(ví dụ mẫu nếu few-shot)<br/>Message: …  Label:'"]
+    PR -->|"call_openai<br/>temperature=0, max_tokens=3"| API["☁️ LLM (gpt-4o-mini)<br/>sinh từng token tiếp theo"]
+    API --> R["' Spam.'"]
+    R -->|"parse_label"| L["1 = spam · 0 = ham<br/>None = không đọc được"]
+```
+
+- **Bản chất:** LLM là mô hình **sinh văn bản**. Nó không trả ra xác suất spam, mà "viết tiếp" prompt bằng chữ có
+  khả năng cao nhất. Bài toán phân loại được **biến thành bài toán viết tiếp câu**.
+- **Không cần dữ liệu có nhãn:** chỉ cần mô tả nhiệm vụ (zero-shot), hoặc thêm vài ví dụ mẫu vào prompt
+  (few-shot). Không có bước train nào.
+- **Cái giá:** mỗi tin là một lần gọi API qua mạng, nên chậm nhất, tốn tiền theo số token, và có khi trả lời "lạc
+  đề". Vì thế cần `temperature=0`, `max_tokens` nhỏ và hàm `parse_label` chịu được lỗi.
+- **Trong notebook:** `build_classification_prompt` → `call_openai` (+ `retry_with_backoff`) → `parse_label` →
+  `llm_classify_batch`.
+
+### Train và dùng: hai giai đoạn khác nhau
+
+```mermaid
+flowchart TB
+    subgraph TRAIN["🏋️ TRAIN — làm một lần, cần dữ liệu có nhãn"]
+        direction LR
+        D["tin train + nhãn"] --> F["dự đoán p"] --> LO["loss: sai bao nhiêu?"] --> G["gradient"] --> U["cập nhật trọng số"]
+        U -.->|"lặp nhiều epoch"| F
+    end
+    subgraph USE["⚡ INFERENCE — mỗi tin mới, đo bằng ms/tin"]
+        direction LR
+        N["tin mới"] --> R["biểu diễn"] --> C["bộ phân loại đã train"] --> Y["nhãn"]
+    end
+    TRAIN -->|"trọng số đã học"| USE
+```
+
+| | ML | DL | Encoder + head | LLM |
+| --- | --- | --- | --- | --- |
+| Ai tạo đặc trưng? | người (từ điển) | mạng tự học tổ hợp từ | mượn từ mô hình pre-train | mô hình pre-train khổng lồ |
+| Cái gì được train trong bài? | `w`, `b` | toàn bộ MLP | chỉ head (kNN: không gì) | không gì |
+| Cần dữ liệu có nhãn? | nhiều | nhiều | ít hơn | gần như không |
+| Hiểu từ đồng nghĩa? | ❌ | ❌ (vẫn dùng BoW) | ✅ | ✅ |
+| Chạy ở đâu? | máy của bạn | máy của bạn | máy của bạn (nặng hơn) | server của OpenAI |
+| Tốc độ / chi phí | rất nhanh, miễn phí | rất nhanh, miễn phí | chậm hơn, miễn phí | chậm nhất, tốn tiền theo token |
+
+> Nhanh hơn chưa chắc đã tốt hơn, và hiểu nghĩa chưa chắc đã đáng tiền. Bảng so sánh ở Phần 5 giúp bạn trả lời
+> câu hỏi này **bằng số đo của chính mình**.
+
+## Các phương án trong bảng so sánh
+
+Cuối bài (Phần 5), notebook gom mọi phương án vào **một bảng**. Mỗi hàng ghép một cách **biểu diễn** với một
+**bộ phân loại**, theo đúng khung 5 bước ở mục [Bản chất](#bản-chất-từ-văn-bản-đến-nhãn-mỗi-cách-làm-gì).
+
+| Hàng | Biểu diễn | Bộ phân loại | Train những gì? | Hidden layer? | Đánh giá trên |
+| --- | --- | --- | --- | --- | --- |
+| **1. BoW + LogReg** | Bag-of-words 2.000 từ | Logistic regression (1 lớp tuyến tính) | Trọng số của từng từ | ❌ | toàn bộ test |
+| **2. BoW + MLP** | Bag-of-words 2.000 từ | MLP: Linear → ReLU → Linear | Toàn bộ mạng | ✅ 64 nơ-ron | toàn bộ test |
+| **3a. Encoder (MiniLM) + kNN** | Encoder MiniLM, **đóng băng** → vector 384 chiều | 5 tin train gần nhất bỏ phiếu | ❌ không train gì, chỉ lưu vector của tập train | ❌ | toàn bộ test |
+| **3b. Encoder (MiniLM) + LogReg** | như 3a | Logistic regression của Phần 1 | Chỉ phần LogReg | ❌ | toàn bộ test |
+| **3c. Encoder (MiniLM) + MLP head** | như 3a | MLP của Phần 2 | Chỉ phần MLP (encoder giữ nguyên) | ✅ 64 nơ-ron | toàn bộ test |
+| **4a / 4b. LLM zero-shot** | — | `gpt-4o-mini` / `gpt-4o` đọc prompt | ❌ không train | — | SUB 40 tin |
+| **4c. LLM few-shot** | — | `gpt-4o-mini` + 4 ví dụ mẫu trong prompt | ❌ không train | — | SUB 40 tin |
+
+Các cặp nên so sánh:
+
+- **1 với 2** và **3b với 3c**: cùng biểu diễn, chỉ khác có hay không có hidden layer. Hidden layer giúp được bao nhiêu?
+- **1 với 3b** và **2 với 3c**: cùng bộ phân loại, chỉ khác biểu diễn (BoW tự xây hay encoder pre-train).
+- **3a với 3b/3c**: không train gì so với có train một "đầu" phân loại nhỏ.
+- **Hàng 1–3 với hàng 4**: tự train mô hình nhỏ so với gọi LLM không cần dữ liệu có nhãn.
+
+> Bạn chỉ **tự code** kNN (3a). Hàng 3b và 3c **tái sử dụng** `train_logreg` (Phần 1) và `build_mlp` / `train_mlp`
+> (Phần 2) mà bạn đã viết. Encoder MiniLM (~22,7 triệu tham số) được dùng nguyên trạng, không train lại.
+
+### Cách đọc bảng so sánh
+
+| Cột | Ý nghĩa |
+| --- | --- |
+| `precision` | Trong số tin bị chặn, bao nhiêu % là spam thật. Thấp nghĩa là **chặn nhầm** tin thường (ví dụ mất tin OTP). |
+| `recall` | Trong số spam thật, bắt được bao nhiêu %. Thấp nghĩa là **spam lọt** qua. |
+| `F1 (test)` | Trung bình điều hoà của precision và recall trên toàn bộ tập test (~775 tin, ~13% spam). Đây là cột chính để so chất lượng hàng 1–3. |
+| `F1 (SUB 40)` | F1 trên 40 tin cân bằng (20 spam / 20 ham). **Chỉ cột này so được với LLM.** Vì SUB cân bằng nên con số thường cao hơn thực tế. |
+| `train (s)` | Thời gian chuẩn bị mô hình. Với 3a/3b/3c, gồm thời gian encoder encode tập train (+ train phần LogReg / MLP). Với LLM là 0. |
+| `tin/s (cả lô)` | Thông lượng khi phân loại cả tập test một lượt. |
+| `p50 / p95 ms/tin` | Độ trễ khi gọi **từng tin một** như một request thật, **tính từ văn bản thô** (gồm cả vectorize / encode / gọi API). p95 nghĩa là 95% số tin xong trong khoảng thời gian này. |
+| `USD / 1k tin` | Chi phí API (chỉ LLM có, hàng 1–3 bằng 0). |
+
+Lưu ý khi so sánh:
+
+- Số liệu của mỗi người khác nhau, vì cách chia dữ liệu phụ thuộc MSSV và tốc độ phụ thuộc máy Colab (CPU hay GPU).
+  README cố ý **không** đưa sẵn kết quả để bạn tự dự đoán trước khi chạy.
+- Chênh lệch F1 nhỏ (khoảng 0.01–0.02) trên vài trăm tin có thể chỉ là ngẫu nhiên. Đừng kết luận phương án nào "thắng"
+  chỉ dựa vào đó.
+- Câu hỏi phản ánh cuối bài dùng yêu cầu **p95 < 50 ms/tin** cho 10 triệu SMS/ngày. Hãy xem cột p95 trước,
+  sau đó mới chọn theo F1 và chi phí.
 
 ## Dữ liệu
 
