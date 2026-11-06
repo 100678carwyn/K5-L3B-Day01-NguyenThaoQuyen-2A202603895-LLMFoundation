@@ -23,9 +23,9 @@
 | 3a. MiniLM + kNN | 0.913 | 0.974 | 67.91 | 0 (chạy local) |
 | 3b. MiniLM + LogReg | 0.939 | 0.947 | 57.17 | 0 (chạy local) |
 | 3c. MiniLM + MLP head | 0.964 | 0.947 | 37.34 | 0 (chạy local) |
-| 4a. LLM nhỏ zero-shot (deepseek-flash) | — | 0.947 | 1585.78 | chưa đo |
-| 4b. LLM lớn zero-shot (deepseek-v4-pro) | — | 0.974 | 8126.57 | chưa đo |
-| 4c. LLM nhỏ few-shot (deepseek-flash) | — | 0.974 | 2070.26 | chưa đo |
+| 4a. LLM nhỏ zero-shot (deepseek-flash) | — | 0.947 | 1585.78 |  |
+| 4b. LLM lớn zero-shot (deepseek-v4-pro) | — | 0.974 | 8126.57 | |
+| 4c. LLM nhỏ few-shot (deepseek-flash) | — | 0.974 | 2070.26 |  |
 
 LLM chỉ chạy trên SUB 40 tin nên chỉ so được bằng cột F1 SUB. Chênh lệch dưới khoảng 0.05 F1 trên SUB 40 coi như hoà.
 
